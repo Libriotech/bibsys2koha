@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
 # bibsys-items.pl - Convert data from BIBSYS into format suitable for Koha
-# Copyright 2012 Magnus Enger Libriotech
+# Copyright 2013 Magnus Enger Libriotech
 
 # This is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

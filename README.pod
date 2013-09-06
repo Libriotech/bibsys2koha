@@ -18,7 +18,7 @@ Run Perl scripts with the -h option for details about what each script does and 
 
 =head1 AUTHOR
 
-Copyright 2012 Magnus Enger Libriotech
+Copyright 2013 Magnus Enger Libriotech
 
 =head1 LICENSE
 
