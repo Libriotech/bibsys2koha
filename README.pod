@@ -1,0 +1,39 @@
+=head1 NAME 
+
+bibsys2koha - scripts for migrating from BIBSYS to Koha
+
+=head1 ABOUT
+
+BIBSYS is a Norwegian ILS, used by academic and special libraries. Koha is the world's first (and coolest) free software ILS. The scripts provided by bibsys2koha are meant to facilitate a migration from BIBSYS to Koha. 
+
+=head1 FILES
+
+Run Perl scripts with the -h option for details about what each script does and what arguments can be supplied.
+
+=over 4
+
+=item * items.pl - Assemble records and item info into a MARCXML file that can be imported into Koha. 
+
+=back
+
+=head1 AUTHOR
+
+Copyright 2012 Magnus Enger Libriotech
+
+=head1 LICENSE
+
+This is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+These files are distributed in the hope that they will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this file; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+
+=cut
