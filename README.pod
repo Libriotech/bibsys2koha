@@ -18,7 +18,7 @@ Run Perl scripts with the -h option for details about what each script does and 
 
 =head1 HISTORY
 
-items.pl was formerly known as bibsys-items in the LibrioTools project: https://github.com/MagnusEnger/LibrioTools
+items.pl was formerly known as bibsys-items.pl in the LibrioTools project: https://github.com/MagnusEnger/LibrioTools
 
 =head1 AUTHOR
 
