@@ -16,6 +16,10 @@ Run Perl scripts with the -h option for details about what each script does and 
 
 =back
 
+=head1 HISTORY
+
+items.pl was formerly known as bibsys-items in the LibrioTools project: https://github.com/MagnusEnger/LibrioTools
+
 =head1 AUTHOR
 
 Copyright 2013 Magnus Enger Libriotech
