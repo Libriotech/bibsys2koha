@@ -37,6 +37,7 @@ use Modern::Perl;
 use utf8;
 
 binmode STDOUT, ":utf8";
+$|=1; # Flush output
 
 # CONFIG
 
@@ -144,6 +145,8 @@ if ( $out_file ) {
 # Parse the item information and keep it in memory
 
 my @ilines = read_file( $item_file );
+say "Read $item_file" if $verbose;
+
 my %items;
 my $item = {};
 my $itemcount = 0;
@@ -178,11 +181,11 @@ foreach my $iline ( @ilines ) {
       
     }
       
-  } elsif ( $iline =~ m/xh/ ) { # FIXME Turn into command line argument? Or look for lines that start with *001
+  } elsif ( $iline =~ m/wp/ ) { # FIXME Turn into command line argument? Or look for lines that start with *001
     $item->{'barcode'}  = substr $iline, 4;
     say $item->{'barcode'} if $debug;
   } else {
-    $item->{'recordid'} = substr $iline, 1;
+    $item->{'recordid'} = substr $iline, 4;
     say $item->{'recordid'} if $debug;
   }
   
@@ -190,9 +193,6 @@ foreach my $iline ( @ilines ) {
 
 print Dumper %items if $debug;
 say "$itemcount items processed" if $verbose;
-
-# print Dumper $items{'000052139980'};
-# die;
 
 ## Parse the records and add the item data
 
@@ -206,14 +206,28 @@ my %subjectcount;
 # Walk through the records once, to map identifiers to titles. We will use this
 # when we convert 491 to 773. 
 my %titles;
+my $first_count = 0;
+say "Starting first record iteration" if $verbose;
 while (my $record = $batch->next()) {
     if ( $record->field( '001' ) && $record->field( '245' ) && $record->field( '245' )->subfield( 'a' ) ) {
         $titles{ $record->field( '001' )->data() } = $record->field( '245' )->subfield( 'a' );
     }
+    $first_count++;
+    if ( $limit && $limit == $first_count ) {
+        last;
+    }
+    if ( $verbose ) {
+        print ".";
+        print "\r$first_count" unless $first_count % 100;
+    }
+
 }
+say "\nDone with first record iteration: $first_count records" if $verbose;
 
 # Walk through the records once more, to do the bulk of the editing
 $batch = MARC::File::USMARC->in( $marc_file );
+my $found_items = 0;
+say "Starting second record iteration" if $verbose;
 while (my $record = $batch->next()) {
 
   # Set the UTF-8 flag
@@ -230,7 +244,7 @@ while (my $record = $batch->next()) {
       
       # Remove leading whitespace
       $field008 = substr $field008, 3;
-      say $field008 if $verbose;
+      # say $field008 if $verbose;
       
       my $a = ' ';
       my ( @b, $c, $c_count, @multi_c, $d );
@@ -247,7 +261,7 @@ while (my $record = $batch->next()) {
           my $index = substr $subfield, 0, 1;
           my $value = substr $subfield, 1;
           $field008count{ $index }{ $value }++;
-          say "$index = $value" if $verbose;
+          # say "$index = $value" if $verbose;
           if ( $index eq 'a' ) {
               $a = $value;
           }
@@ -422,10 +436,13 @@ while (my $record = $batch->next()) {
   # Add item info
   if ( $record->field( '001' ) ) {
     my $dokid = $record->field( '001' )->data();
-    say $dokid if $verbose;
+    # say $dokid if $verbose;
     if ( $items{ $dokid } ) {
       foreach my $olditem ( @{ $items{ $dokid } } ) {
+      
         say "Found item for dokid $dokid with barcode ", $olditem->{ 'barcode' } if $debug;
+        $found_items++;
+
         my $field952 = MARC::Field->new( 952, ' ', ' ',
           'a' => $olditem->{ '096' }{ 'a' }, # Homebranch
           'b' => $olditem->{ '096' }{ 'a' }, # Holdingbranch
@@ -479,10 +496,25 @@ while (my $record = $batch->next()) {
   
   $count++;
   if ( $limit && $limit == $count ) {
-      exit;
+      last;
   }
+  
+    if ( $verbose ) {
+        print ".";
+        print "\r$count" unless $count % 100;
+    }
 
 }
+say "\nDone with second record iteration: $count records" if $verbose;
+
+say "\n$count records processed" if $verbose;
+say "$found_items items connected to records" if $verbose;
+
+=head1 SPECIALIZED OUTPUT
+
+=head2 --subjects
+
+=cut
 
 if ( $subjects ) {
     foreach my $key ( sort keys %subjectcount ) {
@@ -490,17 +522,25 @@ if ( $subjects ) {
     }
 }
 
+=head2 --f008
+
+=cut
+
 if ( $f008 ) {
     print Dumper \%field008count;
 }
+
+=head2 --f008ab
+
+Extract the codes in 008a and 008b and display their frequencies, along with the meaning of the code.
+
+=cut
 
 if ( $f008ab ) {
     foreach my $key (sort {$field008count_ab{$b} <=> $field008count_ab{$a} } keys %field008count_ab) {
         say sprintf("%-4s", $key), sprintf("%5s", $field008count_ab{ $key }), "  ", $field008ab_text{ $key };
     }
 }
-
-say "$count records processed" if $verbose;
 
 # Functions
 
