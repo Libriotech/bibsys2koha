@@ -26,11 +26,13 @@ Run Perl scripts with the -h option for details about what each script does and 
 
 =item 2 Run prep.sh. This will result in two new files: records.mrk and items.txt. 
 
-=item 3 Run items.pl. This will result in a MARCXML file containing records and items, which can be imported into Koha. 
+=item 3 Convert from .mrk to .mrc by running the line2iso.pl script from LibrioTools ( https://github.com/MagnusEnger/LibrioTools )
 
-=item 4 Run bulkmarcimport.pl from Koha. Remember to use the "-m MARCXML" switch. 
+=item 4 Run items.pl. This will result in a MARCXML file containing records and items, which can be imported into Koha. 
 
-=item 5 Run rebuild_zebra.pl from Koha. 
+=item 5 Run bulkmarcimport.pl from Koha. Remember to use the "-m MARCXML" switch. 
+
+=item 6 Run rebuild_zebra.pl from Koha. 
 
 =back
 
