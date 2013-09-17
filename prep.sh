@@ -19,8 +19,8 @@ RECORDS=records.mrk
 cd $DIR
 
 # Give files standard names
-cp *-b60-v2.dok "$ITEMS"
-cp *-b60-v2.mrc "$RECORDS"
+cp *-b60-v*.dok "$ITEMS"
+cp *-b60-v*.mrc "$RECORDS"
 
 ## Fix the records
 
