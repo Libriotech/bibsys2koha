@@ -23,7 +23,7 @@ items.pl - Assemble records and item info into a MARCXML file that can be import
 
 =head1 SYNOPSIS
 
-perl items.pl -m records.mrc -i items.dok > records-with-items.xml
+perl items.pl -m records.mrc -i items.dok --config mylibrary > records-with-items.xml
 
 =cut
 
@@ -32,6 +32,8 @@ use MARC::File::XML;
 use Getopt::Long;
 use Data::Dumper;
 use File::Slurp;
+use YAML::Syck qw'LoadFile';
+use FindBin;
 use Pod::Usage;
 use Modern::Perl;
 use utf8;
@@ -123,17 +125,23 @@ my %bibsys008b = (
 );
 
 # Get options
-my ($marc_file, $item_file, $out_file, $analytics, $subjects, $ccodes, $f008, $f008ab, $limit, $verbose, $debug) = get_options();
+my ($marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $f008ab, $limit, $verbose, $debug) = get_options();
 
 # Check that the file exists
 if (!-e $marc_file) {
-  print "The file $marc_file does not exist...\n";
+  print "The file $marc_file does not exist!\n";
   exit;
 }
 
 # Check that the file exists
 if (!-e $item_file) {
-  print "The file $item_file does not exist...\n";
+  print "The file $item_file does not exist!\n";
+  exit;
+}
+
+# Check that the config dir exists
+if (!-e $FindBin::Bin . '/config/' . $config ) {
+  print "config/$config is not a directory!\n";
   exit;
 }
 
@@ -141,6 +149,17 @@ my $xmloutfile = '';
 if ( $out_file ) {
   $xmloutfile = MARC::File::XML->out( $out_file );
 }
+
+=head1 CONFIG FILES
+
+=head2 branchcodes.yaml
+
+Map from branchcodes in BIBSYS to branchcodes in Koha. 
+
+=cut
+
+my $branchcodes = LoadFile( $FindBin::Bin . '/config/' . $config . '/branchcodes.yaml' );
+say 'Read branchcodes.yaml' if $verbose;
 
 # Parse the item information and keep it in memory
 
@@ -443,9 +462,13 @@ while (my $record = $batch->next()) {
         say "Found item for dokid $dokid with barcode ", $olditem->{ 'barcode' } if $debug;
         $found_items++;
 
+        my $bibsysbranch = $olditem->{ '096' }{ 'a' };
+        $bibsysbranch =~ s|/|_|;
+        $bibsysbranch =~ s|\r||;
+        my $branchcode = $branchcodes->{ $bibsysbranch };
         my $field952 = MARC::Field->new( 952, ' ', ' ',
-          'a' => $olditem->{ '096' }{ 'a' }, # Homebranch
-          'b' => $olditem->{ '096' }{ 'a' }, # Holdingbranch
+          'a' => $branchcode, # Homebranch
+          'b' => $branchcode, # Holdingbranch
           'c' => 'GEN',
           'p' => $olditem->{ 'barcode' },    # Barcode
         );
@@ -550,6 +573,7 @@ sub get_options {
   my $marc_file = '';
   my $item_file = '';
   my $out_file  = '';
+  my $config    = '';
   my $analytics = '';
   my $subjects  = '';
   my $ccodes    = '';
@@ -564,6 +588,7 @@ GetOptions (
     'm|marcfile=s' => \$marc_file,
     'i|itemfile=s' => \$item_file,
     'o|outfile=s'  => \$out_file,
+    'config=s'     => \$config,
     'a|analytics'  => \$analytics,
     's|subjects'   => \$subjects,
     'c|ccodes'     => \$ccodes, 
@@ -578,8 +603,9 @@ GetOptions (
   pod2usage( -exitval => 0 ) if $help;
   pod2usage( -msg => "\nMissing Argument: -m, --marcfile required\n", -exitval => 1 ) if !$marc_file;
   pod2usage( -msg => "\nMissing Argument: -i, --itemfile required\n", -exitval => 1 ) if !$item_file;
+  pod2usage( -msg => "\nMissing Argument: --config required\n", -exitval => 1 ) if !$config;
 
-  return ( $marc_file, $item_file, $out_file, $analytics, $subjects, $ccodes, $f008, $f008ab, $limit, $verbose, $debug );
+  return ( $marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $f008ab, $limit, $verbose, $debug );
 
 }
 
@@ -601,6 +627,10 @@ File that contains item information.
 =item B<-o, --outfile>
 
 File to write XML records to. If this is left out no records will be output. (Useful for debugging.)
+
+=item B<--config>
+
+Name of a dir within the "config" dir, which contains config files in YAML format for a given migration.
 
 =item B<-a, --analytics>
 
