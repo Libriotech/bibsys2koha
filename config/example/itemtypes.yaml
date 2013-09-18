@@ -1,0 +1,13 @@
+# Itemtypes.yaml
+# 
+# Map from codes in 008 $a and $b in BIBSYS to itemtypes in Koha. 
+
+pv:  BK
+p8v: BK
+psv: OPPG
+pdv: OPPG
+phv: OPPG
+ncx: NETTDOK
+nx:  NETTDOK
+vv:  BRETTSPILL
+y0:  TREDIM

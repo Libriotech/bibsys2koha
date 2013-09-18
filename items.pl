@@ -44,18 +44,6 @@ $|=1; # Flush output
 # CONFIG
 
 # Example
-my %itemtypemap = (
-    'pv'  => 'BK',
-    'p8v' => 'BK',
-    'psv' => 'OPPG',
-    'pdv' => 'OPPG',
-    'phv' => 'OPPG',
-    'ncx' => 'NETTDOK',
-    'nx'  => 'NETTDOK',
-    'vv'  => 'BRETTSPILL',
-    'y0'  => 'TREDIM',
-);
-
 my %ccodemap = (
     'master'  => 'MASTER', 
     'pensum'  => 'PENSUM', 
@@ -125,7 +113,7 @@ my %bibsys008b = (
 );
 
 # Get options
-my ($marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $f008ab, $limit, $verbose, $debug) = get_options();
+my ($marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $itemtypes, $limit, $verbose, $debug) = get_options();
 
 # Check that the file exists
 if (!-e $marc_file) {
@@ -139,7 +127,8 @@ if (!-e $item_file) {
   exit;
 }
 
-# Check that the config dir exists
+# Check that the config dir exists. This is relative to where the script lives, 
+# not to where the script is run. 
 if (!-e $FindBin::Bin . '/config/' . $config ) {
   print "config/$config is not a directory!\n";
   exit;
@@ -160,6 +149,16 @@ Map from branchcodes in BIBSYS to branchcodes in Koha.
 
 my $branchcodes = LoadFile( $FindBin::Bin . '/config/' . $config . '/branchcodes.yaml' );
 say 'Read branchcodes.yaml' if $verbose;
+
+=head2 itemtypes.yaml
+
+Map from codes in 008 $a and $b in BIBSYS to itemtypes in Koha. Run this script
+with the --itemtypes option to get some data to base the mapping on. 
+
+=cut
+
+my $itemtypemap = LoadFile( $FindBin::Bin . '/config/' . $config . '/itemtypes.yaml' );
+say 'Read itemtypes.yaml' if $verbose;
 
 # Parse the item information and keep it in memory
 
@@ -243,6 +242,10 @@ while (my $record = $batch->next()) {
 }
 say "\nDone with first record iteration: $first_count records" if $verbose;
 
+=head1 RECORD LEVEL ACTIONS
+
+=cut
+
 # Walk through the records once more, to do the bulk of the editing
 $batch = MARC::File::USMARC->in( $marc_file );
 my $found_items = 0;
@@ -251,6 +254,15 @@ while (my $record = $batch->next()) {
 
   # Set the UTF-8 flag
   $record->encoding( 'UTF-8' );
+
+=head2 Construct a new 008
+
+BIBSYS-MARC has subfields in 008, so we need to construct a new 008, without 
+subfields, to comply with NORMARC. 
+
+Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
+
+=cut
 
   # Get data from 008
   my $field008ab;
@@ -436,6 +448,29 @@ while (my $record = $batch->next()) {
 
     }
   
+=head2 Move 687 to 650
+
+=cut
+  
+    if ( $record->field( '687' ) ) {
+        my @subjects = $record->field( '687' );
+        foreach my $s ( @subjects ) {
+            if ( $s->subfield( 'a' ) ) {
+                my $field650 = MARC::Field->new( '650', ' ', ' ',
+                    'a' => $s->subfield( 'a' )
+                );
+                $record->insert_fields_ordered( $field650 );
+            }
+        }
+        $record->delete_fields( @subjects );
+    }
+  
+=head2 Move 691 to 653
+
+Keywords in 691 are in one long string, delimited by spaces. Keywords that consist of more than one word will be split up, but there is no way to avoid this, sadly. 
+
+=cut
+  
   # 691
   if ( $record->field( '691' ) && $record->field( '691' )->subfield( 'a' ) ) {
     my @subjects = split ' ', $record->field( '691' )->subfield( 'a' );
@@ -462,6 +497,10 @@ while (my $record = $batch->next()) {
         say "Found item for dokid $dokid with barcode ", $olditem->{ 'barcode' } if $debug;
         $found_items++;
 
+=head2 Add 952
+
+=cut
+
         my $bibsysbranch = $olditem->{ '096' }{ 'a' };
         $bibsysbranch =~ s|/|_|;
         $bibsysbranch =~ s|\r||;
@@ -472,20 +511,29 @@ while (my $record = $batch->next()) {
           'c' => 'GEN',
           'p' => $olditem->{ 'barcode' },    # Barcode
         );
-        # Item type
+
+=head3 952$y Itemtype
+
+Uses the mapping in itemtypes.yaml. 
+
+=cut
+
         my $itemtype;
-        if ( $itemtypemap{ $field008ab } ) {
+        if ( $itemtypemap->{ $field008ab } ) {
             if ( $olditem->{ '096' }{ 'c' } && $olditem->{ '096' }{ 'c' } =~ m/^Manus/ ) {
                 $itemtype = 'MAN';
             } else {
-                $itemtype = $itemtypemap{ $field008ab };
+                $itemtype = $itemtypemap->{ $field008ab };
             }
         } else {
             $itemtype = 'X';
         }
-        my $field942 = MARC::Field->new( 942, ' ', ' ', 'c' => $itemtype );
         $field952->add_subfields( 'y', $itemtype );
-        # Collection code
+
+=head3 952$8 Collection code
+
+=cut
+
         if ( $olditem->{ '096' }{ 'b' } ) {
             print $olditem->{ '096' }{ 'b' } if $ccodes;
             if ( $ccodemap{ lc $olditem->{ '096' }{ 'b' } } ) {
@@ -504,8 +552,17 @@ while (my $record = $batch->next()) {
             }
         }
         # Add the field to the record
-        $record->insert_fields_ordered( $field942 );
         $record->insert_fields_ordered( $field952 );
+
+=head2 Add 942
+
+Just add the itemtype in 942$c.
+
+=cut
+        
+        my $field942 = MARC::Field->new( 942, ' ', ' ', 'c' => $itemtype );
+        $record->insert_fields_ordered( $field942 );
+
       }
       # say $record->as_formatted;
       # die;
@@ -555,11 +612,18 @@ if ( $f008 ) {
 
 =head2 --f008ab
 
-Extract the codes in 008a and 008b and display their frequencies, along with the meaning of the code.
+Itemtypes in BIBSYS-MARC are represented by 008 $a and $b, where $b is repeatable. 
+Running the script with this option will give you a list of three things:
+
+=item * All the unique combinations of values from 008 $a and $b
+
+=item * The frequency with which the different combinations occur
+
+=item * The descriptions of the different codes (in Norwegian) 
 
 =cut
 
-if ( $f008ab ) {
+if ( $itemtypes ) {
     foreach my $key (sort {$field008count_ab{$b} <=> $field008count_ab{$a} } keys %field008count_ab) {
         say sprintf("%-4s", $key), sprintf("%5s", $field008count_ab{ $key }), "  ", $field008ab_text{ $key };
     }
@@ -578,7 +642,7 @@ sub get_options {
   my $subjects  = '';
   my $ccodes    = '';
   my $f008      = '';
-  my $f008ab    = '';
+  my $itemtypes    = '';
   my $limit     = '',
   my $verbose   = '';
   my $debug     = '';
@@ -593,7 +657,7 @@ GetOptions (
     's|subjects'   => \$subjects,
     'c|ccodes'     => \$ccodes, 
     'f008'         => \$f008,
-    'f008ab'       => \$f008ab,
+    'f008ab'       => \$itemtypes,
     'l|limit=i'    => \$limit,
     'v|verbose'    => \$verbose,
     'd|debug'      => \$debug,
@@ -605,7 +669,7 @@ GetOptions (
   pod2usage( -msg => "\nMissing Argument: -i, --itemfile required\n", -exitval => 1 ) if !$item_file;
   pod2usage( -msg => "\nMissing Argument: --config required\n", -exitval => 1 ) if !$config;
 
-  return ( $marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $f008ab, $limit, $verbose, $debug );
+  return ( $marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $itemtypes, $limit, $verbose, $debug );
 
 }
 
@@ -648,9 +712,12 @@ Print original and new collection codes.
 
 Dump the contents of field 008, with frequencies.
 
-=item B<--f008ab>
+=item B<--itemtypes>
 
-Print the concatenated contents of fields 008 a and b, in descending order of frequency.
+Print the concatenated contents of fields 008 a and b, in descending order of 
+frequency, with explanations. This can be used to map between item type codes in 
+BIBSYS and itemtypes in Koha. This mapping should be made explicit in the 
+itemtypes.yaml config file. 
 
 =item B<-l, --limit>
 
