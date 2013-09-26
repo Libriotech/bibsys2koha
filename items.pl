@@ -160,7 +160,17 @@ with the --itemtypes option to get some data to base the mapping on.
 my $itemtypemap = LoadFile( $FindBin::Bin . '/config/' . $config . '/itemtypes.yaml' );
 say 'Read itemtypes.yaml' if $verbose;
 
-# Parse the item information and keep it in memory
+=head1 FILES FROM BIBSYS
+
+The raw files from BIBSYS need to be massaged a bit before they can be ingested 
+by this script. See the README and the prep.sh script. The documentation below
+refers to the filenames for the files created by prep.sh. 
+
+=head2 items.txt
+
+Based on the .dok file from BIBSYS
+
+=cut
 
 my @ilines = read_file( $item_file );
 say "Read $item_file" if $verbose;
@@ -532,6 +542,8 @@ Uses the mapping in itemtypes.yaml.
 
 =head3 952$8 Collection code
 
+Based on 096$b from BIBSYS. 
+
 =cut
 
         if ( $olditem->{ '096' }{ 'b' } ) {
@@ -615,11 +627,15 @@ if ( $f008 ) {
 Itemtypes in BIBSYS-MARC are represented by 008 $a and $b, where $b is repeatable. 
 Running the script with this option will give you a list of three things:
 
+=over 4
+
 =item * All the unique combinations of values from 008 $a and $b
 
 =item * The frequency with which the different combinations occur
 
 =item * The descriptions of the different codes (in Norwegian) 
+
+=back
 
 =cut
 
