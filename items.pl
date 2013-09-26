@@ -41,17 +41,6 @@ use utf8;
 binmode STDOUT, ":utf8";
 $|=1; # Flush output
 
-# CONFIG
-
-# Example
-my %ccodemap = (
-    'master'  => 'MASTER', 
-    'pensum'  => 'PENSUM', 
-    'forkurs' => 'FORKURS',
-);
-
-# CONFIG END
-
 # Textual explanations of the codes in 008 $a and $b
 # http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm
 my %bibsys008a = (
@@ -113,7 +102,7 @@ my %bibsys008b = (
 );
 
 # Get options
-my ($marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $itemtypes, $limit, $verbose, $debug) = get_options();
+my ($marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $itemtypes, $f096b, $limit, $verbose, $debug) = get_options();
 
 # Check that the file exists
 if (!-e $marc_file) {
@@ -160,6 +149,17 @@ with the --itemtypes option to get some data to base the mapping on.
 my $itemtypemap = LoadFile( $FindBin::Bin . '/config/' . $config . '/itemtypes.yaml' );
 say 'Read itemtypes.yaml' if $verbose;
 
+=head2 ccodes.yaml
+
+Map from codes in 096$b in BIBSYS to authorized values in the CCODE category in Koha. 
+
+Run this script with the --f096b option to get some data to base the mapping on. 
+
+=cut
+
+my $ccodemap = LoadFile( $FindBin::Bin . '/config/' . $config . '/ccodes.yaml' );
+say 'Read ccodes.yaml' if $verbose;
+
 =head1 FILES FROM BIBSYS
 
 The raw files from BIBSYS need to be massaged a bit before they can be ingested 
@@ -178,6 +178,7 @@ say "Read $item_file" if $verbose;
 my %items;
 my $item = {};
 my $itemcount = 0;
+my %field096b_count;
 foreach my $iline ( @ilines ) {
   $iline =~ s/\r\n//g; # chomp does not work
   $iline =~ s/\n//g;   # Some files have one, some have the other
@@ -190,6 +191,11 @@ foreach my $iline ( @ilines ) {
     push @{$items{ $item->{'recordid'} } }, $item;
     # say Dumper $items{ $item->{'recordid'} } if $debug;
     say Dumper $item if $debug;
+    
+    # ONEOFF Print SQL to update ccode with 096$b, mapped with ccodemap, based on barcode
+    # if ( $item->{ '096' }{ 'b' } ) {
+    #     say 'UPDATE items SET ccode = "', $ccodemap->{ $item->{ '096' }{ 'b' } }, '" WHERE barcode = "', $item->{'barcode'}, '"; -- ', $item->{ '096' }{ 'b' };
+    # }
     
     # Empty %item so we can start over on a new one
     undef $item;
@@ -206,6 +212,9 @@ foreach my $iline ( @ilines ) {
       next if $index eq '*';
       my $value = substr $subfield, 1;
       $item->{ '096' }{ $index } = $value;
+      if ( $index eq 'b' ) {
+        $field096b_count{ $value }++;
+      }
       
     }
       
@@ -548,9 +557,9 @@ Based on 096$b from BIBSYS.
 
         if ( $olditem->{ '096' }{ 'b' } ) {
             print $olditem->{ '096' }{ 'b' } if $ccodes;
-            if ( $ccodemap{ lc $olditem->{ '096' }{ 'b' } } ) {
-                print " -> ", $ccodemap{ lc $olditem->{ '096' }{ 'b' } } if $ccodes;
-                $field952->add_subfields( '8', $ccodemap{ lc $olditem->{ '096' }{ 'b' } } );
+            if ( $ccodemap->{ lc $olditem->{ '096' }{ 'b' } } ) {
+                print " -> ", $ccodemap->{ lc $olditem->{ '096' }{ 'b' } } if $ccodes;
+                $field952->add_subfields( '8', $ccodemap->{ lc $olditem->{ '096' }{ 'b' } } );
             }
             print "\n" if $ccodes;
         }
@@ -645,6 +654,18 @@ if ( $itemtypes ) {
     }
 }
 
+=head2 --f096b
+
+Prints the contents of 096$b from the BIBSYS item level data. 
+
+=cut
+
+if ( $f096b ) {
+    foreach my $key ( sort keys %field096b_count ) {
+        say sprintf("%5s", $field096b_count{ $key }), ' ', sprintf("%-4s", $key);
+    }
+}
+
 # Functions
 
 sub get_options {
@@ -658,7 +679,8 @@ sub get_options {
   my $subjects  = '';
   my $ccodes    = '';
   my $f008      = '';
-  my $itemtypes    = '';
+  my $itemtypes = '';
+  my $f096b     = '';
   my $limit     = '',
   my $verbose   = '';
   my $debug     = '';
@@ -674,6 +696,7 @@ GetOptions (
     'c|ccodes'     => \$ccodes, 
     'f008'         => \$f008,
     'f008ab'       => \$itemtypes,
+    'f096b'        => \$f096b,
     'l|limit=i'    => \$limit,
     'v|verbose'    => \$verbose,
     'd|debug'      => \$debug,
@@ -685,7 +708,7 @@ GetOptions (
   pod2usage( -msg => "\nMissing Argument: -i, --itemfile required\n", -exitval => 1 ) if !$item_file;
   pod2usage( -msg => "\nMissing Argument: --config required\n", -exitval => 1 ) if !$config;
 
-  return ( $marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $itemtypes, $limit, $verbose, $debug );
+  return ( $marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $itemtypes, $f096b, $limit, $verbose, $debug );
 
 }
 
@@ -734,6 +757,10 @@ Print the concatenated contents of fields 008 a and b, in descending order of
 frequency, with explanations. This can be used to map between item type codes in 
 BIBSYS and itemtypes in Koha. This mapping should be made explicit in the 
 itemtypes.yaml config file. 
+
+=item B<--f096b>
+
+Dump the contents of field 096$b, with frequencies.
 
 =item B<-l, --limit>
 
