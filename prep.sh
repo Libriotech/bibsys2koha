@@ -48,7 +48,7 @@ sed -i 's/@>//g' $RECORDS
 # sed -i 's/*000/*/' $ITEMS
 
 # Replace \r\n with \n
-perl -pi -e '$/=undef; s/\r\n/\n/g' $RECORDS
+perl -pi -e '$/=undef; s/\r\n/\n/g' $ITEMS
 
 # Replace new line + dollar with just dollar
 perl -pi -e '$/=undef; s/\n\$/\$/g' $ITEMS
