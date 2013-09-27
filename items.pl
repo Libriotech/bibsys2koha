@@ -539,16 +539,12 @@ Uses the mapping in itemtypes.yaml.
 
         my $itemtype;
         if ( $itemtypemap->{ $field008ab } ) {
-            if ( $olditem->{ '096' }{ 'c' } && $olditem->{ '096' }{ 'c' } =~ m/^Manus/ ) {
-                $itemtype = 'MAN';
-            } else {
-                $itemtype = $itemtypemap->{ $field008ab };
-            }
+            $itemtype = $itemtypemap->{ $field008ab };
         } else {
             $itemtype = 'X';
         }
         $field952->add_subfields( 'y', $itemtype );
-
+        
 =head3 952$8 Collection code
 
 Based on 096$b from BIBSYS. 
