@@ -545,6 +545,9 @@ Uses the mapping in itemtypes.yaml.
         }
         $field952->add_subfields( 'y', $itemtype );
         
+        # ONEOFF Print SQL to update items with an updated itemtypesmap
+        # say "UPDATE items SET itype = '$itemtype' WHERE barcode = '$olditem->{ 'barcode' }';";
+
 =head3 952$8 Collection code
 
 Based on 096$b from BIBSYS. 
