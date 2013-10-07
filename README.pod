@@ -36,6 +36,22 @@ Run Perl scripts with the -h option for details about what each script does and 
 
 =back
 
+=head1 BARCODES
+
+If the library that is being migrated has barcodes connected to DOKIDs, the 
+barcodes might not be part of the exported item information, but might come in a 
+separate file. This file contains DOKIDs and barcodes separated by a space. To 
+change the order of the "columns", something like this might be used:
+
+  awk -v RS="\r" -v FS=" " -v ORS="\n" -v OFS=" " '{print $2,$1}' f1.txt > f2.txt
+
+The resulting file can then be turned into SQL similar to this:
+
+  UPDATE items SET barcode = '<barcode>' WHERE barcode = '<DOKID>';
+
+The resulting SQL file can then be run against the database after the other 
+item information has been migrated. 
+
 =head1 TODO
 
 This is a work in progress. Each new migration it is used for reveals some new things that need to be fixed. Here is a list of currently known issues:
