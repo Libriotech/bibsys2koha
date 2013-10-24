@@ -62,6 +62,20 @@ This is a work in progress. Each new migration it is used for reveals some new t
 
 =back
 
+=head1 GOTCHAS
+
+If you are requesting an export from BIBSYS, with a view to migration, insist on the following being part of the data exported:
+
+=over 4
+
+=item * Barcodes (if they differ from DOKIDS, see the BARCODES section above)
+
+=item * All URLs for electronic documents should be in 856$u
+
+=item * Single issues of periodicals should be exported as items
+
+=back
+
 =head1 GITHUB
 
 https://github.com/MagnusEnger/bibsys2koha
