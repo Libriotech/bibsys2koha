@@ -6,7 +6,7 @@ bibsys2koha - scripts for migrating from BIBSYS to Koha
 
 BIBSYS is a Norwegian ILS, used by academic and special libraries. Koha is the world's first (and coolest) free software ILS. The scripts provided by bibsys2koha are meant to facilitate a migration from BIBSYS to Koha. 
 
-=head1 FILES
+=head1 SCRIPTS
 
 Run Perl scripts with the -h option for details about what each script does and what arguments can be supplied.
 
@@ -18,6 +18,25 @@ Run Perl scripts with the -h option for details about what each script does and 
 
 =back
 
+=head1 FILES FROM BIBSYS
+
+The export from BIBSYS will typically consist of two files:
+
+=over 4
+
+=item * .mrk - MARC records in line format
+
+=item * .dok - items in MARC line format
+
+=back
+
+Records in both files contain a 000 field with a record identifier (called 
+Objektid in BIBSYS), which can be used to link items to records. E.g.:
+
+  *00097015822x
+
+Here, 97015822x is the record identifier and *000 designates the field. 
+
 =head1 HOW TO USE THIS? 
 
 =over 4
@@ -28,11 +47,13 @@ Run Perl scripts with the -h option for details about what each script does and 
 
 =item 3 Convert from .mrk to .mrc by running the line2iso.pl script from LibrioTools ( https://github.com/MagnusEnger/LibrioTools )
 
-=item 4 Run items.pl. This will result in a MARCXML file containing records and items, which can be imported into Koha. 
+=item 4 Prepare the config files as desribed in the POD of items.pl.
 
-=item 5 Run bulkmarcimport.pl from Koha. Remember to use the "-m MARCXML" switch. 
+=item 5 Run items.pl. This will result in a MARCXML file containing records and items, which can be imported into Koha.
 
-=item 6 Run rebuild_zebra.pl from Koha. 
+=item 6 Run bulkmarcimport.pl from Koha. Remember to use the "-m MARCXML" switch. 
+
+=item 7 Run rebuild_zebra.pl from Koha. 
 
 =back
 
@@ -54,11 +75,15 @@ item information has been migrated.
 
 =head1 TODO
 
-This is a work in progress. Each new migration it is used for reveals some new things that need to be fixed. Here is a list of currently known issues:
+This is a work in progress. Each new migration it is used for reveals some new
+things that need to be fixed. Here is a list of currently known issues:
 
 =over 4
 
 =item * Merge 571$b into 571$a. (571$b is defined in BIBSYS-MARC, but NORMARC only has 571$a.)
+
+=item * items.pl currently uses a hard coded two letter code to identify item
+identifiers. This should be a mandatory command line option instead. 
 
 =back
 
