@@ -1,0 +1,8 @@
+# ccodes.yaml
+# Mapping between 096$b from BIBSYS and CCODEs used in Koha
+---
+'ART': 'ART'
+'Arkiv S': 'ARKIV'
+'BRO': 'BRO'
+'BSH': 'BSH'
+'Boligsos.': 'BOLIGSOS'
