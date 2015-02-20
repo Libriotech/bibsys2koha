@@ -82,9 +82,6 @@ things that need to be fixed. Here is a list of currently known issues:
 
 =item * Merge 571$b into 571$a. (571$b is defined in BIBSYS-MARC, but NORMARC only has 571$a.)
 
-=item * items.pl currently uses a hard coded two letter code to identify item
-identifiers. This should be a mandatory command line option instead. 
-
 =back
 
 =head1 GOTCHAS

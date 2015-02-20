@@ -104,23 +104,22 @@ my %bibsys008b = (
 # Get options
 my ($marc_file, $item_file, $out_file, $config, $analytics, $subjects, $ccodes, $f008, $itemtypes, $f096b, $limit, $verbose, $debug) = get_options();
 
-# Check that the file exists
+# Check that the MARC file exists
 if (!-e $marc_file) {
-  print "The file $marc_file does not exist!\n";
-  exit;
+  die "The file $marc_file does not exist!\n";
 }
 
-# Check that the file exists
+# Check that the items file exists
 if (!-e $item_file) {
-  print "The file $item_file does not exist!\n";
-  exit;
+  die "The file $item_file does not exist!\n";
 }
 
-# Check that the config dir exists. This is relative to where the script lives, 
-# not to where the script is run. 
+# Check that the config dir exists. This is relative to where the script lives,
+# not to where the script is run.
 if (!-e $FindBin::Bin . '/config/' . $config ) {
-  print "config/$config is not a directory!\n";
-  exit;
+  die "config/$config is not a directory!\n";
+} else {
+  say "Using config '$config'";
 }
 
 my $xmloutfile = '';
@@ -132,7 +131,7 @@ if ( $out_file ) {
 
 =head2 branchcodes.yaml
 
-Map from branchcodes in BIBSYS to branchcodes in Koha. 
+Map from branchcodes in BIBSYS to branchcodes in Koha.
 
 =cut
 
@@ -142,7 +141,7 @@ say 'Read branchcodes.yaml' if $verbose;
 =head2 itemtypes.yaml
 
 Map from codes in 008 $a and $b in BIBSYS to itemtypes in Koha. Run this script
-with the --itemtypes option to get some data to base the mapping on. 
+with the --itemtypes option to get some data to base the mapping on.
 
 =cut
 
@@ -151,9 +150,9 @@ say 'Read itemtypes.yaml' if $verbose;
 
 =head2 ccodes.yaml
 
-Map from codes in 096$b in BIBSYS to authorized values in the CCODE category in Koha. 
+Map from codes in 096$b in BIBSYS to authorized values in the CCODE category in Koha.
 
-Run this script with the --f096b option to get some data to base the mapping on. 
+Run this script with the --f096b option to get some data to base the mapping on.
 
 =cut
 
@@ -162,9 +161,9 @@ say 'Read ccodes.yaml' if $verbose;
 
 =head1 FILES FROM BIBSYS
 
-The raw files from BIBSYS need to be massaged a bit before they can be ingested 
+The raw files from BIBSYS need to be massaged a bit before they can be ingested
 by this script. See the README and the prep.sh script. The documentation below
-refers to the filenames for the files created by prep.sh. 
+refers to the filenames for the files created by prep.sh.
 
 =head2 items.txt
 
@@ -183,31 +182,31 @@ foreach my $iline ( @ilines ) {
   $iline =~ s/\r\n//g; # chomp does not work
   $iline =~ s/\n//g;   # Some files have one, some have the other
   say $iline if $debug;
-  
+
   if ( $iline eq '^' ) {
 
     $itemcount++;
-    
+
     push @{$items{ $item->{'recordid'} } }, $item;
     # say Dumper $items{ $item->{'recordid'} } if $debug;
     say Dumper $item if $debug;
-    
+
     # ONEOFF Print SQL to update ccode with 096$b, mapped with ccodemap, based on barcode
     # if ( $item->{ '096' }{ 'b' } ) {
     #     say 'UPDATE items SET ccode = "', $ccodemap->{ $item->{ '096' }{ 'b' } }, '" WHERE barcode = "', $item->{'barcode'}, '"; -- ', $item->{ '096' }{ 'b' };
     # }
-    
+
     # Empty %item so we can start over on a new one
     undef $item;
-    next;  
+    next;
 
   } elsif ( $iline =~ m/^\*096/ ){
-    
+
     # Item details
     my @subfields = split(/\$/, $iline);
-    
+
     foreach my $subfield (@subfields) {
-      
+
       my $index = substr $subfield, 0, 1;
       next if $index eq '*';
       my $value = substr $subfield, 1;
@@ -215,21 +214,27 @@ foreach my $iline ( @ilines ) {
       if ( $index eq 'b' ) {
         $field096b_count{ $value }++;
       }
-      
+
     }
-      
-  } elsif ( $iline =~ m/wp/ ) { # FIXME Turn into command line argument? Or look for lines that start with *001
+
+  } elsif ( $iline =~ m/^\*001/ ) { # FIXME
     $item->{'barcode'}  = substr $iline, 4;
     say $item->{'barcode'} if $debug;
   } else {
     $item->{'recordid'} = substr $iline, 4;
     say $item->{'recordid'} if $debug;
   }
-  
+
 }
 
 print Dumper %items if $debug;
 say "$itemcount items processed" if $verbose;
+
+=head2 records.mrc
+
+Based on the .mrc file from BIBSYS.
+
+=cut
 
 ## Parse the records and add the item data
 
@@ -241,11 +246,12 @@ my %field008ab_text;
 my %subjectcount;
 
 # Walk through the records once, to map identifiers to titles. We will use this
-# when we convert 491 to 773. 
+# when we convert 491 to 773.
 my %titles;
 my $first_count = 0;
 say "Starting first record iteration" if $verbose;
 while (my $record = $batch->next()) {
+
     if ( $record->field( '001' ) && $record->field( '245' ) && $record->field( '245' )->subfield( 'a' ) ) {
         $titles{ $record->field( '001' )->data() } = $record->field( '245' )->subfield( 'a' );
     }
@@ -271,13 +277,13 @@ my $found_items = 0;
 say "Starting second record iteration" if $verbose;
 while (my $record = $batch->next()) {
 
-  # Set the UTF-8 flag
-  $record->encoding( 'UTF-8' );
+# Set the UTF-8 flag
+$record->encoding( 'UTF-8' );
 
 =head2 Construct a new 008
 
-BIBSYS-MARC has subfields in 008, so we need to construct a new 008, without 
-subfields, to comply with NORMARC. 
+BIBSYS-MARC has subfields in 008, so we need to construct a new 008, without
+subfields, to comply with NORMARC.
 
 Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
 
@@ -288,14 +294,14 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
   if ( $record->field( '008' ) ) {
 
       my $field008 = $record->field( '008' )->data();
-      
+
       # Delete the field from the record
       $record->delete_fields( $record->field( '008' ) );
-      
+
       # Remove leading whitespace
       $field008 = substr $field008, 3;
       # say $field008 if $verbose;
-      
+
       my $a = ' ';
       my ( @b, $c, $c_count, @multi_c, $d );
       my $e = ' ';
@@ -303,11 +309,11 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
       my $i = ' ';
       my $n = ' ';
       my $s = ' ';
-      
+
       my @subfields = split(/\$/, $field008);
-    
+
       foreach my $subfield (@subfields) {
-      
+
           my $index = substr $subfield, 0, 1;
           my $value = substr $subfield, 1;
           $field008count{ $index }{ $value }++;
@@ -342,7 +348,8 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
               $s = $value;
           }
       }
-      
+
+      # This is just for reporting some stats, for the --f008ab option
       $field008ab = $a . join '', sort @b;
       $field008count_ab{ $field008ab }++;
       $field008ab_text{ $field008ab } = $bibsys008a{ $a };
@@ -371,7 +378,7 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
               $record->insert_fields_ordered( $field041 );
           }
       }
-      
+
       # Assemble the 008 string
       my $string008 = ' '; # 00
         $string008 .= ' '; # 01
@@ -411,12 +418,12 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
       # Add the 008
       my $field008new = MARC::Field->new( '008', $string008 );
       $record->insert_fields_ordered( $field008new );
-      
+
   }
-  
+
   # 241
   if ( $record->field( '241' ) && $record->field( '241' )->subfield( 'a' ) ) {
-      
+
       foreach my $field241 ( $record->field( '241' ) ) {
           my $field240 = MARC::Field->new( '240', ' ', ' ',
               'a' => $field241->subfield( 'a' )
@@ -431,7 +438,7 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
           $record->delete_fields( $field241 );
       }
   }
-  
+
     # 491
     if ( $record->field( '491' ) && $analytics ) {
         say '-------------------------------------';
@@ -451,7 +458,7 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
         if ( $field491->subfield( 'a' ) ) {
             $field773->add_subfields( 't' => $field491->subfield( 'a' ) );
         } elsif ( $titles{ $field491->subfield( 'n' ) } ) {
-            # Use the actual title 
+            # Use the actual title
             $field773->add_subfields( 't' => $titles{ $field491->subfield( 'n' ) } );
         }
         if ( $field491->subfield( 'v' ) ) {
@@ -459,18 +466,18 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
         }
         $record->insert_fields_ordered( $field773 );
         $record->delete_fields( $field491 );
-        
+
         # Print the 773 we just added
         if ( $analytics ) {
             say $record->field( '773' )->as_formatted();
         }
 
     }
-  
+
 =head2 Move 687 to 650
 
 =cut
-  
+
     if ( $record->field( '687' ) ) {
         my @subjects = $record->field( '687' );
         foreach my $s ( @subjects ) {
@@ -483,13 +490,18 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
         }
         $record->delete_fields( @subjects );
     }
-  
+
 =head2 Move 691 to 653
 
-Keywords in 691 are in one long string, delimited by spaces. Keywords that consist of more than one word will be split up, but there is no way to avoid this, sadly. 
+The subjects in 691 are given as a space delimited string, and below we split
+on space, so that every "word" is moved to a separate 653 field. This results
+in multi-word subjects being split up into separate subjects, so for example
+"juridiske doktoravhandlinger" from 691 becomes two separate 653 fields:
+"juridiske" and "doktoravhandlinger". This is of course very messy, but there
+is no way to avoid it, sadly.
 
 =cut
-  
+
   # 691
   if ( $record->field( '691' ) && $record->field( '691' )->subfield( 'a' ) ) {
     my @subjects = split ' ', $record->field( '691' )->subfield( 'a' );
@@ -502,23 +514,33 @@ Keywords in 691 are in one long string, delimited by spaces. Keywords that consi
     }
   }
   $record->delete_fields( $record->field( '691' ) );
-  
-  # Remove 899
-  $record->delete_fields( $record->field( '899' ) );
-  
-  # Add item info
-  if ( $record->field( '001' ) ) {
-    my $dokid = $record->field( '001' )->data();
-    # say $dokid if $verbose;
-    if ( $items{ $dokid } ) {
-      foreach my $olditem ( @{ $items{ $dokid } } ) {
-      
-        say "Found item for dokid $dokid with barcode ", $olditem->{ 'barcode' } if $debug;
-        $found_items++;
 
-=head2 Add 952
+=head2 Remove 899
+
+#FIXME
 
 =cut
+
+  $record->delete_fields( $record->field( '899' ) );
+
+=head2 Add item level information in 952
+
+# FIXME
+
+=cut
+
+  # Add item info
+  if ( $record->field( '001' ) ) {
+    # Get the dokid
+    my $dokid = $record->field( '001' )->data();
+    print " $dokid" if $debug;
+    if ( $items{ $dokid } ) {
+      my $last_itemtype;
+      # Look up items by dokid and add them to our record
+      foreach my $olditem ( @{ $items{ $dokid } } ) {
+
+        say "Found item for dokid $dokid with barcode ", $olditem->{ 'barcode' } if $debug;
+        $found_items++;
 
         my $bibsysbranch = $olditem->{ '096' }{ 'a' };
         $bibsysbranch =~ s|/|_|;
@@ -533,7 +555,7 @@ Keywords in 691 are in one long string, delimited by spaces. Keywords that consi
 
 =head3 952$y Itemtype
 
-Uses the mapping in itemtypes.yaml. 
+Uses the mapping in itemtypes.yaml.
 
 =cut
 
@@ -544,13 +566,14 @@ Uses the mapping in itemtypes.yaml.
             $itemtype = 'X';
         }
         $field952->add_subfields( 'y', $itemtype );
-        
+        $last_itemtype = $itemtype;
+
         # ONEOFF Print SQL to update items with an updated itemtypesmap
         # say "UPDATE items SET itype = '$itemtype' WHERE barcode = '$olditem->{ 'barcode' }';";
 
 =head3 952$8 Collection code
 
-Based on 096$b from BIBSYS. 
+Based on 096$b from BIBSYS.
 
 =cut
 
@@ -562,43 +585,59 @@ Based on 096$b from BIBSYS.
             }
             print "\n" if $ccodes;
         }
-        # Call number
+
+=head3 952$o Call number
+
+Based on 096$c from BIBSYS.
+
+=cut
+
         if ( $olditem->{ '096' }{ 'c' } ) {
             if ( $olditem->{ '096' }{ 'c' } =~ m/(.*) \(Ikke fjern/ ) {
                 $field952->add_subfields( 'o', $1 );
-                $field952->add_subfields( 'z', 'Ikke fjernlån' );
+                $field952->add_subfields( 'z', 'Ikke fjernlån' ); # Public note
             } else {
                 $field952->add_subfields( 'o', $olditem->{ '096' }{ 'c' } );
             }
         }
+
+=head3 952$x Non-public note
+
+Based on 096$f from BIBSYS.
+
+=cut
+
+        if ( $olditem->{ '096' }{ 'f' } ) {
+            $field952->add_subfields( 'x', $olditem->{ '096' }{ 'f' } );
+        }
+
         # Add the field to the record
         $record->insert_fields_ordered( $field952 );
+
+      } # end foreach items
 
 =head2 Add 942
 
 Just add the itemtype in 942$c.
 
 =cut
-        
-        my $field942 = MARC::Field->new( 942, ' ', ' ', 'c' => $itemtype );
-        $record->insert_fields_ordered( $field942 );
 
-      }
-      # say $record->as_formatted;
-      # die;
-    }
-  }
-  
+    my $field942 = MARC::Field->new( 942, ' ', ' ', 'c' => $last_itemtype );
+    $record->insert_fields_ordered( $field942 );
+
+    } # end if $items{ $dokid }
+  } # end if $record->field( '001' )
+
   # Write out the record as XML
   if ( $out_file ) {
       $xmloutfile->write($record);
   }
-  
+
   $count++;
   if ( $limit && $limit == $count ) {
       last;
   }
-  
+
     if ( $verbose ) {
         print ".";
         print "\r$count" unless $count % 100;
@@ -612,7 +651,19 @@ say "$found_items items connected to records" if $verbose;
 
 =head1 SPECIALIZED OUTPUT
 
+Th following options can be used to extract potentially interesting data from
+the BIBSYS export files. Some of these can be used as a basis for constructing
+the config files that are necessary to do a full migration with this script.
+
 =head2 --subjects
+
+Output subjects from 691, and their frequencies.
+
+Keywords in 691 are in one long string, delimited by spaces. Keywords that
+consist of more than one word will be split up, but there is no way to avoid
+this, sadly.
+
+This script moves keywords from 691 to 653.
 
 =cut
 
@@ -632,7 +683,7 @@ if ( $f008 ) {
 
 =head2 --f008ab
 
-Itemtypes in BIBSYS-MARC are represented by 008 $a and $b, where $b is repeatable. 
+Itemtypes in BIBSYS-MARC are represented by 008 $a and $b, where $b is repeatable.
 Running the script with this option will give you a list of three things:
 
 =over 4
@@ -641,7 +692,7 @@ Running the script with this option will give you a list of three things:
 
 =item * The frequency with which the different combinations occur
 
-=item * The descriptions of the different codes (in Norwegian) 
+=item * The descriptions of the different codes (in Norwegian)
 
 =back
 
@@ -655,7 +706,11 @@ if ( $itemtypes ) {
 
 =head2 --f096b
 
-Prints the contents of 096$b from the BIBSYS item level data. 
+Prints the contents of 096$b ("Samling" = "Collection") from the BIBSYS item level data.
+
+This can be used as a basis for the B<ccodes.yaml> config file.
+
+Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-32.htm#P2121_67767>
 
 =cut
 
@@ -684,7 +739,7 @@ sub get_options {
   my $verbose   = '';
   my $debug     = '';
   my $help      = '';
-  
+
 GetOptions (
     'm|marcfile=s' => \$marc_file,
     'i|itemfile=s' => \$item_file,
@@ -692,7 +747,7 @@ GetOptions (
     'config=s'     => \$config,
     'a|analytics'  => \$analytics,
     's|subjects'   => \$subjects,
-    'c|ccodes'     => \$ccodes, 
+    'c|ccodes'     => \$ccodes,
     'f008'         => \$f008,
     'f008ab'       => \$itemtypes,
     'f096b'        => \$f096b,
@@ -719,7 +774,7 @@ __END__
 
 =item B<-m, --marcfile>
 
-MARC records in ISO2709. If records from BIBSYS are in "line" format they will 
+MARC records in ISO2709. If records from BIBSYS are in "line" format they will
 have to be transformed with e.g. line2iso.pl
 
 =item B<-i, --itemfile>
@@ -736,7 +791,7 @@ Name of a dir within the "config" dir, which contains config files in YAML forma
 
 =item B<-a, --analytics>
 
-Dump some info (001, 245, 491 and the generated 773) about analytic records. 
+Dump some info (001, 245, 491 and the generated 773) about analytic records.
 
 =item B<-s, --subjects>
 
@@ -744,7 +799,7 @@ Print out subjects found in 691 in CSV format.
 
 =item B<-c, --ccodes>
 
-Print original and new collection codes. 
+Print original and new collection codes.
 
 =item B<--f008>
 
@@ -752,10 +807,10 @@ Dump the contents of field 008, with frequencies.
 
 =item B<--itemtypes>
 
-Print the concatenated contents of fields 008 a and b, in descending order of 
-frequency, with explanations. This can be used to map between item type codes in 
-BIBSYS and itemtypes in Koha. This mapping should be made explicit in the 
-itemtypes.yaml config file. 
+Print the concatenated contents of fields 008 a and b, in descending order of
+frequency, with explanations. This can be used to map between item type codes in
+BIBSYS and itemtypes in Koha. This mapping should be made explicit in the
+itemtypes.yaml config file.
 
 =item B<--f096b>
 
