@@ -803,7 +803,7 @@ Print original and new collection codes.
 
 Dump the contents of field 008, with frequencies.
 
-=item B<--itemtypes>
+=item B<--f008ab>
 
 Print the concatenated contents of fields 008 a and b, in descending order of
 frequency, with explanations. This can be used to map between item type codes in
