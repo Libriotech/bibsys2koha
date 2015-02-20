@@ -23,12 +23,11 @@ items.pl - Assemble records and item info into a MARCXML file that can be import
 
 =head1 SYNOPSIS
 
-perl items.pl -m records.mrc -i items.dok --config mylibrary > records-with-items.xml
+perl items.pl -m records.marcxml -i items.dok --config mylibrary > records-with-items.marxml
 
 =cut
 
-use MARC::File::USMARC;
-use MARC::File::XML;
+use MARC::File::XML ( BinaryEncoding => 'utf8', RecordFormat => 'NORMARC' );
 use Getopt::Long;
 use Data::Dumper;
 use File::Slurp;
@@ -230,15 +229,14 @@ foreach my $iline ( @ilines ) {
 print Dumper %items if $debug;
 say "$itemcount items processed" if $verbose;
 
-=head2 records.mrc
+=head2 records.marcxml
 
 Based on the .mrc file from BIBSYS.
 
 =cut
 
 ## Parse the records and add the item data
-
-my $batch = MARC::File::USMARC->in( $marc_file );
+my $batch = MARC::File::XML->in( $marc_file );
 my $count = 0;
 my %field008count;
 my %field008count_ab;
@@ -272,7 +270,7 @@ say "\nDone with first record iteration: $first_count records" if $verbose;
 =cut
 
 # Walk through the records once more, to do the bulk of the editing
-$batch = MARC::File::USMARC->in( $marc_file );
+$batch = MARC::File::XML->in( $marc_file );
 my $found_items = 0;
 say "Starting second record iteration" if $verbose;
 while (my $record = $batch->next()) {
@@ -774,8 +772,8 @@ __END__
 
 =item B<-m, --marcfile>
 
-MARC records in ISO2709. If records from BIBSYS are in "line" format they will
-have to be transformed with e.g. line2iso.pl
+MARC records in MARCXML. If records from BIBSYS are in "line" format they will
+have to be transformed with e.g. C<line2iso.pl -x>
 
 =item B<-i, --itemfile>
 
