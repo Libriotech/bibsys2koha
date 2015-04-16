@@ -121,6 +121,7 @@ if (!-e $FindBin::Bin . '/config/' . $config ) {
   say "Using config '$config'";
 }
 
+# Set up the XML output file
 my $xmloutfile = '';
 if ( $out_file ) {
   $xmloutfile = MARC::File::XML->out( $out_file );
@@ -158,6 +159,25 @@ Run this script with the --f096b option to get some data to base the mapping on.
 my $ccodemap = LoadFile( $FindBin::Bin . '/config/' . $config . '/ccodes.yaml' );
 say 'Read ccodes.yaml' if $verbose;
 
+=head1 INTERMEDIARY FILES
+
+Files produced by other scripts in bibsys2koha.
+
+=head2 links.yaml
+
+If links/URLs are export from BIBSYS, they can be tansformed to YAML using the
+F<links.pl> script. The output of this script should be directed to a file 
+called F<links.yaml> in the same directory as the config files. 
+
+=cut
+
+my $links_path = $FindBin::Bin . '/config/' . $config . '/links.yaml';
+my $linksmap;
+if ( -e $links_path ) {
+    $linksmap = LoadFile( $links_path );
+    say 'Read links.yaml' if $verbose;
+}
+
 =head1 FILES FROM BIBSYS
 
 The raw files from BIBSYS need to be massaged a bit before they can be ingested
@@ -167,6 +187,10 @@ refers to the filenames for the files created by prep.sh.
 =head2 items.txt
 
 Based on the .dok file from BIBSYS
+
+This file is in line/mnemonic format, so we need to pick that apart and 
+assemble item data we can use further on in the script, when we attach 952
+fieds for the items.
 
 =cut
 
@@ -178,51 +202,107 @@ my $item = {};
 my $itemcount = 0;
 my %field096b_count;
 foreach my $iline ( @ilines ) {
-  $iline =~ s/\r\n//g; # chomp does not work
-  $iline =~ s/\n//g;   # Some files have one, some have the other
-  say $iline if $debug;
 
-  if ( $iline eq '^' ) {
+    $iline =~ s/\r\n//g; # chomp does not work
+    $iline =~ s/\n//g;   # Some files have one, some have the other
+    say $iline if $debug;
 
-    $itemcount++;
+    if ( $iline eq '^' ) {
 
-    push @{$items{ $item->{'recordid'} } }, $item;
-    # say Dumper $items{ $item->{'recordid'} } if $debug;
-    say Dumper $item if $debug;
+        $itemcount++;
 
-    # ONEOFF Print SQL to update ccode with 096$b, mapped with ccodemap, based on barcode
-    # if ( $item->{ '096' }{ 'b' } ) {
-    #     say 'UPDATE items SET ccode = "', $ccodemap->{ $item->{ '096' }{ 'b' } }, '" WHERE barcode = "', $item->{'barcode'}, '"; -- ', $item->{ '096' }{ 'b' };
-    # }
+        push @{$items{ $item->{'recordid'} } }, $item;
+        # say Dumper $items{ $item->{'recordid'} } if $debug;
+        say Dumper $item if $debug;
 
-    # Empty %item so we can start over on a new one
-    undef $item;
-    next;
+        # ONEOFF Print SQL to update ccode with 096$b, mapped with ccodemap, based on barcode
+        # if ( $item->{ '096' }{ 'b' } ) {
+        #     say 'UPDATE items SET ccode = "', $ccodemap->{ $item->{ '096' }{ 'b' } }, '" WHERE barcode = "', $item->{'barcode'}, '"; -- ', $item->{ '096' }{ 'b' };
+        # }
 
-  } elsif ( $iline =~ m/^\*096/ ){
+        # Empty %item so we can start over on a new one
+        undef $item;
+        next;
 
-    # Item details
-    my @subfields = split(/\$/, $iline);
+    } elsif ( $iline =~ m/^\*096/ ){
 
-    foreach my $subfield (@subfields) {
+        # Item details are in 096
+        my @subfields = split(/\$/, $iline);
 
-      my $index = substr $subfield, 0, 1;
-      next if $index eq '*';
-      my $value = substr $subfield, 1;
-      $item->{ '096' }{ $index } = $value;
-      if ( $index eq 'b' ) {
-        $field096b_count{ $value }++;
-      }
+        foreach my $subfield (@subfields) {
+
+            my $index = substr $subfield, 0, 1;
+            next if $index eq '*';
+            my $value = substr $subfield, 1;
+            $item->{ '096' }{ $index } = $value;
+            if ( $index eq 'b' ) {
+                $field096b_count{ $value }++;
+            }
+
+        }
+
+    } elsif ( $iline =~ m/^\*001/ ) { 
+
+        # Barcodes are in 001
+        $item->{'barcode'}  = substr $iline, 4;
+        say "barcode: " . $item->{'barcode'} if $debug;
+
+    } elsif ( $iline =~ m/^\*002/ ) { 
+    
+        # 002 can server two purposes: 
+        # - status (mini, kat etc) for regular items
+        # - barcode for journal issue items
+
+        if ( $iline =~ m/^\*002h[0-9]{8}/ ) {
+            # We have a journal issue item - use this as the barcode
+            $item->{'barcode'}  = substr $iline, 4;
+            $item->{'itemtype'}  = 'TIDSH';
+        } else {
+            # This is the status
+            $item->{'status'}  = substr $iline, 4;
+            say "status: " . $item->{'status'} if $debug;
+        }
+
+    } elsif ( $iline =~ m/^\*000/ ) {
+
+        $item->{'recordid'} = substr $iline, 4;
+        say "recordid: " . $item->{'recordid'} if $debug;
+
+    } elsif ( $iline =~ m/^\*901/ ) {
+
+        $item->{'year'} = substr $iline, 8;
+        $item->{'is_serial_item'} = 1;
+
+    } elsif ( $iline =~ m/^\*902/ ) {
+
+        $item->{'unknown'} = substr $iline, 8;
+        $item->{'is_serial_item'} = 1;
+
+    } elsif ( $iline =~ m/^\*903/ ) {
+
+        # Not used
+
+    } elsif ( $iline =~ m/^\*904/ ) {
+
+        $item->{'year2'} = substr $iline, 8;
+        $item->{'is_serial_item'} = 1;
+
+    } elsif ( $iline =~ m/^\*905/ ) {
+
+        $item->{'issue'} = substr $iline, 8;
+        $item->{'is_serial_item'} = 1;
+
+    } elsif ( $iline =~ m/^\*906/ ) {
+
+        $item->{'issue2'} = substr $iline, 8;
+        $item->{'is_serial_item'} = 1;
+
+    } elsif ( $iline =~ m/^\*907/ ) {
+
+        $item->{'month'} = substr $iline, 8;
+        $item->{'is_serial_item'} = 1;
 
     }
-
-  } elsif ( $iline =~ m/^\*001/ ) { # FIXME
-    $item->{'barcode'}  = substr $iline, 4;
-    say $item->{'barcode'} if $debug;
-  } else {
-    $item->{'recordid'} = substr $iline, 4;
-    say $item->{'recordid'} if $debug;
-  }
 
 }
 
@@ -272,11 +352,47 @@ say "\nDone with first record iteration: $first_count records" if $verbose;
 # Walk through the records once more, to do the bulk of the editing
 $batch = MARC::File::XML->in( $marc_file );
 my $found_items = 0;
+my %seen_records;
 say "Starting second record iteration" if $verbose;
-while (my $record = $batch->next()) {
+RECORD: while (my $record = $batch->next()) {
 
-# Set the UTF-8 flag
-$record->encoding( 'UTF-8' );
+    # Skip any non-unique records
+    my $dokid = $record->field( '001' )->data();
+    if ( $seen_records{ $dokid } && $seen_records{ $dokid } == 1 ) {
+        say "skipping: " . $dokid if $debug;
+        next RECORD;
+    } else {
+        $seen_records{ $dokid } = 1;
+    }
+  
+=head2 Construct a leader
+
+Records from BIBSYS do not have leaders, so we need to add one
+
+=cut
+
+    # Try to construct position 7 "Bibliographic category"
+    my $lead07 = ' ';
+    if ( $record->field( '491' ) && $record->field( '491' )->subfield( 'n' ) ) {
+        # This is an analytical record ("Analytt")
+        $lead07 = 'p';
+    } elsif ( $record->field( '022' ) && $record->field( '022' )->subfield( 'a' ) ) {
+        # This is a serial ("Periodikum")
+        $lead07 = 's';
+    }
+
+    my $lead = '     ';   # 00-04 Systemgenerert informasjon
+    $lead .= ' ';         # 05 Postens status
+    $lead .= ' ';         # 06 Materialtype
+    $lead .= $lead07;     # 07 Bibliografisk kategori
+    $lead .= '         '; # 08-16 Systemgenerert informasjon
+    $lead .= ' ';         # 17 Beskrivelsesnivå
+    $lead .= '      ';    # 18-23 Systemgenerert informasjon
+    $record->leader( $lead );
+
+    # Set the UTF-8 flag. This actually sets position 09 in the leader, so we
+    # have to do this after we add the leader
+    $record->encoding( 'UTF-8' );
 
 =head2 Construct a new 008
 
@@ -437,7 +553,9 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
       }
   }
 
-    # 491
+    # 491 - Analytics
+    # See http://wiki.koha-community.org/wiki/Analytics for how things should
+    # be done.
     if ( $record->field( '491' ) && $analytics ) {
         say '-------------------------------------';
         say $record->field( '001' )->as_formatted();
@@ -449,18 +567,22 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
     if ( $record->field( '491' ) && $record->field( '491' )->subfield( 'n' ) ) {
 
         my $field491 = $record->field( '491' );
-        my $field773 = MARC::Field->new( '773', ' ', ' ',
+        # Add a 773 field, with "Lokalt systems identifikasjonsnummer" 
+        # (local id) in 773w
+        my $field773 = MARC::Field->new( '773', '0', ' ',
             'w' => $field491->subfield( 'n' )
         );
-        # Title
+        # Title - 773t
         if ( $field491->subfield( 'a' ) ) {
+            # Get the title from the 491a field in the original record
             $field773->add_subfields( 't' => $field491->subfield( 'a' ) );
         } elsif ( $titles{ $field491->subfield( 'n' ) } ) {
-            # Use the actual title
+            # Use the actual title, from a previous scan of 245's 
             $field773->add_subfields( 't' => $titles{ $field491->subfield( 'n' ) } );
         }
+        # Edition ("utgave") - 773g
         if ( $field491->subfield( 'v' ) ) {
-            $field773->add_subfields( 'b' => $field491->subfield( 'v' ) );
+            $field773->add_subfields( 'g' => $field491->subfield( 'v' ) );
         }
         $record->insert_fields_ordered( $field773 );
         $record->delete_fields( $field491 );
@@ -515,15 +637,30 @@ is no way to avoid it, sadly.
 
 =head2 Remove 899
 
-#FIXME
+Not defined in NORMARC.
 
 =cut
 
   $record->delete_fields( $record->field( '899' ) );
 
+=head2 Add 856 (record level URL)
+
+If we have a URL (from the "856" file exported by BIBSYS) we add a 856u for it. 
+
+=cut
+
+if ( $linksmap->{ $dokid } ) {
+
+    my $field856 = MARC::Field->new( '856', ' ', ' ',
+        'u' => $linksmap->{ $dokid },
+    );
+    $record->insert_fields_ordered( $field856 );
+
+}
+
 =head2 Add item level information in 952
 
-# FIXME
+Build up new items in 952.
 
 =cut
 
@@ -535,12 +672,20 @@ is no way to avoid it, sadly.
     if ( $items{ $dokid } ) {
       my $last_itemtype;
       # Look up items by dokid and add them to our record
-      foreach my $olditem ( @{ $items{ $dokid } } ) {
+      ITEM: foreach my $olditem ( reverse @{ $items{ $dokid } } ) {
 
         say "Found item for dokid $dokid with barcode ", $olditem->{ 'barcode' } if $debug;
         $found_items++;
+        
+        # Check if this item is a regular item or a serial item (e.g. one issue of a journal)
 
-        my $bibsysbranch = $olditem->{ '096' }{ 'a' };
+=head3 952$a and 952$b Homebranch and holdingbranch, 952$p Barcode
+
+Uses the mapping in branchcodes.yaml.
+
+=cut
+
+        my $bibsysbranch = $olditem->{ '096' }{ 'a' } || 'WSOC'; # FIXME
         $bibsysbranch =~ s|/|_|;
         $bibsysbranch =~ s|\r||;
         my $branchcode = $branchcodes->{ $bibsysbranch };
@@ -558,11 +703,25 @@ Uses the mapping in itemtypes.yaml.
 =cut
 
         my $itemtype;
-        if ( $itemtypemap->{ $field008ab } ) {
+        if ( $olditem->{'itemtype'} ) {
+            $itemtype = $olditem->{'itemtype'};
+        } elsif ( $itemtypemap->{ $field008ab } ) {
             $itemtype = $itemtypemap->{ $field008ab };
         } else {
             $itemtype = 'X';
         }
+        
+        # Skip any records that would be electronic journals - FIXME
+        if ( $itemtype eq 'ETIDS' ) {
+            say "skipped" if $debug;
+            next RECORD;
+        }
+        # Skip items with type "TIDS" - we will have items for single issues
+        if ( $itemtype eq 'TIDS' ) {
+            say "skipped" if $debug;
+            next ITEM;
+        } 
+        
         $field952->add_subfields( 'y', $itemtype );
         $last_itemtype = $itemtype;
 
@@ -571,15 +730,18 @@ Uses the mapping in itemtypes.yaml.
 
 =head3 952$8 Collection code
 
-Based on 096$b from BIBSYS.
+Based on 096$b from BIBSYS. Values must be defined in the CCODE authorized 
+values category.
 
 =cut
 
         if ( $olditem->{ '096' }{ 'b' } ) {
             print $olditem->{ '096' }{ 'b' } if $ccodes;
-            if ( $ccodemap->{ lc $olditem->{ '096' }{ 'b' } } ) {
-                print " -> ", $ccodemap->{ lc $olditem->{ '096' }{ 'b' } } if $ccodes;
-                $field952->add_subfields( '8', $ccodemap->{ lc $olditem->{ '096' }{ 'b' } } );
+            if ( $olditem->{'status'} eq 'intern' ) {
+                $field952->add_subfields( '8', 'INTERN' );
+            } elsif ( $ccodemap->{ $olditem->{ '096' }{ 'b' } } ) {
+                print " -> ", $ccodemap->{ $olditem->{ '096' }{ 'b' } } if $ccodes;
+                $field952->add_subfields( '8', $ccodemap->{ $olditem->{ '096' }{ 'b' } } );
             }
             print "\n" if $ccodes;
         }
@@ -599,6 +761,23 @@ Based on 096$c from BIBSYS.
             }
         }
 
+=head3 952$h Serial enumeration caption
+
+Issue, volume etc for serial items.
+
+=cut
+
+        if ( $olditem->{'is_serial_item'} ) {
+            my $caption = '';
+            # $caption .= $olditem->{ 'year' } . ' ' || '';
+            # $caption .= $olditem->{ 'unknown' } . ' ' if $olditem->{ 'unknown' };
+            $caption .= $olditem->{ 'year2' } . ' ' if $olditem->{ 'year2' };
+            $caption .= $olditem->{ 'issue' } . ' ' if $olditem->{ 'issue' };
+            $caption .= $olditem->{ 'issue2' } . ' ' if $olditem->{ 'issue2' };
+            $caption .= $olditem->{ 'month' } if $olditem->{ 'month' };
+            $field952->add_subfields( 'h', $caption );
+        }
+
 =head3 952$x Non-public note
 
 Based on 096$f from BIBSYS.
@@ -608,6 +787,16 @@ Based on 096$f from BIBSYS.
         if ( $olditem->{ '096' }{ 'f' } ) {
             $field952->add_subfields( 'x', $olditem->{ '096' }{ 'f' } );
         }
+
+=head3 952$u Uniform Resource Identifier
+
+Links can be added in 856u or here. 
+
+=cut
+
+        # if ( $linksmap->{ $dokid } ) {
+        #     $field952->add_subfields( 'u', $linksmap->{ $dokid } );
+        # }
 
         # Add the field to the record
         $record->insert_fields_ordered( $field952 );
