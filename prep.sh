@@ -14,13 +14,15 @@ die() {
 DIR=$1
 ITEMS=items.txt
 RECORDS=records.mrk
+LINKS=links.txt
 
 # Change into the target dir
 cd $DIR
 
 # Give files standard names
-cp *-b60.dok "$ITEMS"
-cp *-b60.mrc "$RECORDS"
+cp cat-dok.mrc "$ITEMS"
+cp cat-obj.mrc "$RECORDS"
+cp WSOC_v1-856.mrc "$LINKS"
 
 ## Fix the records
 
@@ -52,3 +54,8 @@ perl -pi -e '$/=undef; s/\r\n/\n/g' $ITEMS
 
 # Replace new line + dollar with just dollar
 perl -pi -e '$/=undef; s/\n\$/\$/g' $ITEMS
+
+## Fix the links
+
+# Replace \r\n with \n
+perl -pi -e '$/=undef; s/\r\n/\n/g' $LINKS
