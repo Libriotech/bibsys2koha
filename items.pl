@@ -113,12 +113,11 @@ if (!-e $item_file) {
   die "The file $item_file does not exist!\n";
 }
 
-# Check that the config dir exists. This is relative to where the script lives,
-# not to where the script is run.
-if (!-e $FindBin::Bin . '/config/' . $config ) {
-  die "config/$config is not a directory!\n";
+# Check that the config dir exists. This is an absolute location
+if (!-e $config ) {
+  die "$config is not a directory!\n";
 } else {
-  say "Using config '$config'";
+  say "Using config from '$config'" if $verbose;
 }
 
 # Set up the XML output file
@@ -133,20 +132,40 @@ if ( $out_file ) {
 
 Map from branchcodes in BIBSYS to branchcodes in Koha.
 
+BIBSYS branchcodes are found in 096a, in the items data.
+
 =cut
 
-my $branchcodes = LoadFile( $FindBin::Bin . '/config/' . $config . '/branchcodes.yaml' );
-say 'Read branchcodes.yaml' if $verbose;
+my $missing_config = 0;
+
+my $branchcodes_file = $config . 'branchcodes.yaml';
+my $branchcodes;
+if ( -e $branchcodes_file ) {
+    $branchcodes = LoadFile( $branchcodes_file );
+    say 'Read branchcodes.yaml' if $verbose;
+} else {
+    say "$branchcodes_file is missing";
+    $missing_config++;
+}
 
 =head2 itemtypes.yaml
 
 Map from codes in 008 $a and $b in BIBSYS to itemtypes in Koha. Run this script
-with the --itemtypes option to get some data to base the mapping on.
+with the --f008ab option to get some data to base the mapping on.
 
 =cut
 
-my $itemtypemap = LoadFile( $FindBin::Bin . '/config/' . $config . '/itemtypes.yaml' );
-say 'Read itemtypes.yaml' if $verbose;
+my $itemtypes_file = $config . 'itemtypes.yaml';
+my $itemtypemap;
+if ( !$itemtypes ) {
+    if ( -e $itemtypes_file ) {
+        $itemtypemap = LoadFile( $itemtypes_file );
+        say 'Read itemtypes.yaml' if $verbose;
+    } else {
+        say "$itemtypes_file is missing";
+        $missing_config++;
+    }
+}
 
 =head2 ccodes.yaml
 
@@ -156,8 +175,21 @@ Run this script with the --f096b option to get some data to base the mapping on.
 
 =cut
 
-my $ccodemap = LoadFile( $FindBin::Bin . '/config/' . $config . '/ccodes.yaml' );
-say 'Read ccodes.yaml' if $verbose;
+my $ccodes_file = $config . 'ccodes.yaml';
+my $ccodemap;
+if ( -e $ccodes_file ) {
+    $ccodemap = LoadFile( $ccodes_file );
+    say 'Read ccodes.yaml' if $verbose;
+} else {
+    say "$ccodes_file is missing";
+    $missing_config++;
+}
+
+# If we have missing config files AND none of the "analytical" command line
+# options are provided, we should die
+if ( $missing_config > 0 && ( !$analytics && !$subjects && !$ccodes && !$f008 && !$itemtypes && !$f096b ) ) {
+    die "$missing_config missing config files";
+}
 
 =head1 INTERMEDIARY FILES
 
@@ -685,7 +717,7 @@ Uses the mapping in branchcodes.yaml.
 
 =cut
 
-        my $bibsysbranch = $olditem->{ '096' }{ 'a' } || 'WSOC'; # FIXME
+        my $bibsysbranch = $olditem->{ '096' }{ 'a' };
         $bibsysbranch =~ s|/|_|;
         $bibsysbranch =~ s|\r||;
         my $branchcode = $branchcodes->{ $bibsysbranch };
@@ -737,7 +769,7 @@ values category.
 
         if ( $olditem->{ '096' }{ 'b' } ) {
             print $olditem->{ '096' }{ 'b' } if $ccodes;
-            if ( $olditem->{'status'} eq 'intern' ) {
+            if ( $olditem->{'status'} && $olditem->{'status'} eq 'intern' ) {
                 $field952->add_subfields( '8', 'INTERN' );
             } elsif ( $ccodemap->{ $olditem->{ '096' }{ 'b' } } ) {
                 print " -> ", $ccodemap->{ $olditem->{ '096' }{ 'b' } } if $ccodes;
@@ -974,7 +1006,7 @@ File to write XML records to. If this is left out no records will be output. (Us
 
 =item B<--config>
 
-Name of a dir within the "config" dir, which contains config files in YAML format for a given migration.
+Name of a dir which contains config files in YAML format for a given migration.
 
 =item B<-a, --analytics>
 
