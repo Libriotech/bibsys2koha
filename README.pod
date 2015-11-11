@@ -12,9 +12,12 @@ Run Perl scripts with the -h option for details about what each script does and 
 
 =over 4
 
-=item * prep.sh - Prepares the files for use with items.pl.
+=item * migrate-sample.sh is an example of how the other scripts can be tied
+together to do a migration
 
-=item * items.pl - Assemble records and item info into a MARCXML file that can be imported into Koha. 
+=item * prep.sh - Prepares the files for use with items.pl
+
+=item * items.pl - Assemble records and item info into a MARCXML file that can be imported into Koha
 
 =back
 
@@ -30,6 +33,16 @@ The export from BIBSYS will typically consist of two files:
 
 =back
 
+or:
+
+=over 4
+
+=item *-objektposter.txt - MARC records in line format
+
+=item *-dokumentposter.txt - items in MARC line format
+
+=back
+
 Records in both files contain a 000 field with a record identifier (called 
 Objektid in BIBSYS), which can be used to link items to records. E.g.:
 
@@ -37,7 +50,7 @@ Objektid in BIBSYS), which can be used to link items to records. E.g.:
 
 Here, 97015822x is the record identifier and *000 designates the field. 
 
-=head1 HOW TO USE THIS? 
+=head1 HOW TO USE THIS? **NEEDS AN UPDATE!**
 
 =over 4
 
@@ -100,7 +113,7 @@ If you are requesting an export from BIBSYS, with a view to migration, insist on
 
 =head1 GITHUB
 
-https://github.com/MagnusEnger/bibsys2koha
+https://github.com/Libriotech/bibsys2koha
 
 =head1 HISTORY
 
@@ -108,7 +121,7 @@ items.pl was formerly known as bibsys-items.pl in the LibrioTools project: https
 
 =head1 AUTHOR
 
-Copyright 2013 Magnus Enger Libriotech
+Copyright 2015 Magnus Enger Libriotech
 
 =head1 LICENSE
 
