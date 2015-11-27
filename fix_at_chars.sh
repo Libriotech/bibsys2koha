@@ -53,3 +53,16 @@ perl -pi -e '$/=undef; s/\@S/\$/g' $FILE
 perl -pi -e '$/=undef; s/\@0/°/g' $FILE
 
 perl -pi -e '$/=undef; s/::::::/@/g' $FILE
+
+# Ooh, here is another way to treat non-ASCII! 
+
+perl -pi -e '$/=undef; s/#vr/ř/g' $FILE
+perl -pi -e '$/=undef; s|#/e|é|g' $FILE
+perl -pi -e '$/=undef; s/#vs/s/g' $FILE
+perl -pi -e '$/=undef; s/#vS/Š/g' $FILE
+perl -pi -e '$/=undef; s/#vc/č/g' $FILE
+perl -pi -e '$/=undef; s/#vC/Č/g' $FILE
+perl -pi -e '$/=undef; s/#vz/ž/g' $FILE
+perl -pi -e '$/=undef; s/#ve/ě/g' $FILE
+perl -pi -e '$/=undef; s/#;c/ç/g' $FILE
+perl -pi -e '$/=undef; s/#-o/ō/g' $FILE
