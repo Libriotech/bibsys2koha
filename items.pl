@@ -567,7 +567,46 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
 
   }
 
-  # 241
+=head2 Move 087 to 084
+
+BIBSYS MARC defines 087 for "local classification". This field is not defined
+in NORMARC, but NORMARC has 087 for "other classification numbers" instead, so
+we move the data from 087 to 084.
+
+BIBSYS MARC: 087 (R) Lokal klassifikasjon
+L<http://www.bibsys.no/files/out/handbok_html/marc/marc-28.htm#P2077_66890>
+
+NORMARC: 084 Andre klassifikasjonsnummer
+
+=cut
+
+  if ( $record->field( '087' ) && $record->field( '087' )->subfield( 'a' ) ) {
+
+      foreach my $field087 ( $record->field( '087' ) ) {
+          my $field084 = MARC::Field->new( '084', ' ', ' ',
+              'a' => $field087->subfield( 'a' )
+          );
+#          if ( $field241->subfield( 'b' ) ) {
+#              $field240->add_subfields( 'b' => $field241->subfield( 'b' ) );
+#          }
+#          if ( $field241->subfield( 'w' ) ) {
+#              $field240->add_subfields( 'w' => $field241->subfield( 'w' ) );
+#          }
+          $record->insert_fields_ordered( $field084 );
+          $record->delete_fields( $field087 );
+      }
+  }
+
+=head2 Move 241 to 240
+
+BIBSYS MARC: 241 (R) Originaltittel
+http://www.bibsys.no/files/out/handbok_html/marc/marc-44.htm#P3350_104715
+
+NORMARC: 240 Standardtittel
+
+=cut
+
+
   if ( $record->field( '241' ) && $record->field( '241' )->subfield( 'a' ) ) {
 
       foreach my $field241 ( $record->field( '241' ) ) {
@@ -627,6 +666,11 @@ Documentation: L<http://www.bibsys.no/files/out/handbok_html/marc/marc-02.htm>
     }
 
 =head2 Move 687 to 650
+
+BIBSYS MARC: 687 (R) Lokale kontrollerte emneord
+http://www.bibsys.no/files/out/handbok_html/marc/marc-87.htm#P5732_179978
+
+NORMARC: 650 Generelle emneord
 
 =cut
 
